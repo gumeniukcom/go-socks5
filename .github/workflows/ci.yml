@@ -34,7 +34,7 @@ jobs:
           cache: true
       - uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.0
+          version: latest
 
   vuln:
     name: govulncheck
