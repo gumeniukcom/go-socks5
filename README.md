@@ -31,7 +31,7 @@ make build
 ./bin/go-socks5 -c config.toml
 ```
 
-Requires Go 1.24 or newer.
+Requires Go 1.25 or newer.
 
 ## Configuration
 
