@@ -101,16 +101,44 @@ func applyEnv(cfg *Config) {
 
 // Validate returns an error describing the first invalid field.
 func (c *Config) Validate() error {
+	if err := c.validateAddresses(); err != nil {
+		return err
+	}
+	if err := c.validateUsers(); err != nil {
+		return err
+	}
+	if err := c.validateTimeouts(); err != nil {
+		return err
+	}
+	return c.validateLogging()
+}
+
+func (c *Config) validateAddresses() error {
 	if c.Listen == "" {
 		return errors.New("config: listen must not be empty")
 	}
 	if _, err := net.ResolveTCPAddr("tcp", c.Listen); err != nil {
 		return fmt.Errorf("config: invalid listen address %q: %w", c.Listen, err)
 	}
-	if c.AuthEnable && len(c.Users) == 0 {
-		return errors.New("config: auth enabled but no users configured")
+	for label, addr := range map[string]string{
+		"metrics_addr": c.MetricsAddr,
+		"pprof_addr":   c.PProfAddr,
+	} {
+		if addr == "" {
+			continue
+		}
+		if _, err := net.ResolveTCPAddr("tcp", addr); err != nil {
+			return fmt.Errorf("config: invalid %s %q: %w", label, addr, err)
+		}
 	}
-	if !c.AuthEnable && len(c.Users) > 0 {
+	return nil
+}
+
+func (c *Config) validateUsers() error {
+	switch {
+	case c.AuthEnable && len(c.Users) == 0:
+		return errors.New("config: auth enabled but no users configured")
+	case !c.AuthEnable && len(c.Users) > 0:
 		return errors.New("config: users configured but auth disabled (set auth = true)")
 	}
 	seen := make(map[string]struct{}, len(c.Users))
@@ -126,6 +154,10 @@ func (c *Config) Validate() error {
 		}
 		seen[u.Login] = struct{}{}
 	}
+	return nil
+}
+
+func (c *Config) validateTimeouts() error {
 	if c.MaxConns <= 0 {
 		return errors.New("config: max_conns must be > 0")
 	}
@@ -141,6 +173,10 @@ func (c *Config) Validate() error {
 	if c.ShutdownTimeout < 0 {
 		return errors.New("config: shutdown_timeout must be >= 0")
 	}
+	return nil
+}
+
+func (c *Config) validateLogging() error {
 	switch c.LogFormat {
 	case "json", "text":
 	default:
@@ -150,16 +186,6 @@ func (c *Config) Validate() error {
 	case "debug", "info", "warn", "error":
 	default:
 		return fmt.Errorf("config: log_level must be debug|info|warn|error, got %q", c.LogLevel)
-	}
-	if c.MetricsAddr != "" {
-		if _, err := net.ResolveTCPAddr("tcp", c.MetricsAddr); err != nil {
-			return fmt.Errorf("config: invalid metrics_addr %q: %w", c.MetricsAddr, err)
-		}
-	}
-	if c.PProfAddr != "" {
-		if _, err := net.ResolveTCPAddr("tcp", c.PProfAddr); err != nil {
-			return fmt.Errorf("config: invalid pprof_addr %q: %w", c.PProfAddr, err)
-		}
 	}
 	return nil
 }

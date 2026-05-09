@@ -21,10 +21,10 @@ type request struct {
 }
 
 var (
-	errBadVersion       = errors.New("request: bad SOCKS version")
-	errBadReserved      = errors.New("request: reserved byte must be 0x00")
-	errAddrTypeNotSupp  = errors.New("request: address type not supported")
-	errEmptyDomain      = errors.New("request: domain length must be > 0")
+	errBadVersion      = errors.New("request: bad SOCKS version")
+	errBadReserved     = errors.New("request: reserved byte must be 0x00")
+	errAddrTypeNotSupp = errors.New("request: address type not supported")
+	errEmptyDomain     = errors.New("request: domain length must be > 0")
 )
 
 // fqdn returns "host:port" suitable for net.Dial.

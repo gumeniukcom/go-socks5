@@ -55,7 +55,7 @@ func (c *command) connect(ctx context.Context) (byte, error) {
 		c.logger.Warn("upstream dial failed", "target", target, "err", err)
 		return mapDialError(err), err
 	}
-	defer upstream.Close()
+	defer func() { _ = upstream.Close() }()
 
 	// Build success reply describing the local end of the upstream connection.
 	resp := &response{reply: repSuccess}
@@ -171,4 +171,3 @@ func mapDialError(err error) byte {
 	}
 	return repServerFailure
 }
-

@@ -161,7 +161,10 @@ func startSidecar(ctx context.Context, logger *slog.Logger, name, addr string, h
 			logger.Error("sidecar failed", "name", name, "err", err)
 		}
 	}()
-	go func() {
+	// Detach Shutdown from the parent ctx: by the time this goroutine runs,
+	// ctx is already cancelled, but http.Server.Shutdown still needs a live
+	// context with its own grace window.
+	go func() { //nolint:gosec // G118: ctx is already cancelled, fresh ctx is intentional
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

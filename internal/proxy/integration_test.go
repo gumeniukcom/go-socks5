@@ -31,7 +31,8 @@ func newTestServer(t *testing.T, auth proxy.Authorizer) (string, context.CancelF
 		t.Fatal(err)
 	}
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,6 +51,30 @@ func newTestServer(t *testing.T, auth proxy.Authorizer) (string, context.CancelF
 	return addr, cancel
 }
 
+// proxyGet performs an HTTP GET through the SOCKS5 proxy and returns the
+// response body. It centralises the noctx/bodyclose plumbing so individual
+// tests stay focused on assertions.
+func proxyGet(t *testing.T, proxyAddr, target string, userInfo *url.Userinfo) ([]byte, error) {
+	t.Helper()
+	proxyURL := &url.URL{Scheme: "socks5", Host: proxyAddr, User: userInfo}
+	client := &http.Client{
+		Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)},
+		Timeout:   5 * time.Second,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return io.ReadAll(resp.Body)
+}
+
 func TestProxyConnectNoAuth(t *testing.T) {
 	t.Parallel()
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -59,17 +84,10 @@ func TestProxyConnectNoAuth(t *testing.T) {
 
 	addr, _ := newTestServer(t, proxy.NoAuth{})
 
-	proxyURL, _ := url.Parse("socks5://" + addr)
-	client := &http.Client{
-		Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)},
-		Timeout:   5 * time.Second,
-	}
-	resp, err := client.Get(upstream.URL)
+	body, err := proxyGet(t, addr, upstream.URL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "hello" {
 		t.Fatalf("body = %q", body)
 	}
@@ -93,29 +111,17 @@ func TestProxyConnectWithAuth(t *testing.T) {
 	addr, _ := newTestServer(t, auth)
 
 	t.Run("good creds", func(t *testing.T) {
-		proxyURL, _ := url.Parse("socks5://alice:hunter2@" + addr)
-		client := &http.Client{
-			Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)},
-			Timeout:   5 * time.Second,
-		}
-		resp, err := client.Get(upstream.URL)
+		b, err := proxyGet(t, addr, upstream.URL, url.UserPassword("alice", "hunter2"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
-		b, _ := io.ReadAll(resp.Body)
 		if string(b) != "ok" {
 			t.Fatalf("body = %q", b)
 		}
 	})
 
 	t.Run("bad creds rejected", func(t *testing.T) {
-		proxyURL, _ := url.Parse("socks5://alice:nope@" + addr)
-		client := &http.Client{
-			Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)},
-			Timeout:   5 * time.Second,
-		}
-		_, err := client.Get(upstream.URL)
+		_, err := proxyGet(t, addr, upstream.URL, url.UserPassword("alice", "nope"))
 		if err == nil {
 			t.Fatal("expected auth failure to surface as error")
 		}
@@ -127,7 +133,8 @@ func TestProxyShutdown(t *testing.T) {
 	addr, cancel := newTestServer(t, proxy.NoAuth{})
 
 	// Establish a TCP connection so something is in flight.
-	conn, err := net.DialTimeout("tcp", addr, time.Second)
+	dialer := &net.Dialer{Timeout: time.Second}
+	conn, err := dialer.DialContext(context.Background(), "tcp", addr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,9 +143,10 @@ func TestProxyShutdown(t *testing.T) {
 	cancel() // Trigger shutdown.
 
 	// New connection should fail soon after.
+	probeDialer := &net.Dialer{Timeout: 100 * time.Millisecond}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		c, derr := net.DialTimeout("tcp", addr, 100*time.Millisecond)
+		c, derr := probeDialer.DialContext(context.Background(), "tcp", addr)
 		if derr != nil {
 			return
 		}

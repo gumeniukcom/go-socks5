@@ -64,7 +64,8 @@ func NewServer(opts Options) (*Server, error) {
 // triggers a graceful shutdown: stop accepting, drain in-flight connections,
 // then return.
 func (s *Server) ListenAndServe(ctx context.Context, network, address string) error {
-	ln, err := net.Listen(network, address)
+	var lc net.ListenConfig
+	ln, err := lc.Listen(ctx, network, address)
 	if err != nil {
 		return err
 	}
@@ -74,7 +75,8 @@ func (s *Server) ListenAndServe(ctx context.Context, network, address string) er
 // Serve accepts on ln until ctx is cancelled or ln returns a permanent
 // error. ln is closed on return.
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
-	s.opts.Logger.Info("serving",
+	s.opts.Logger.Info(
+		"serving",
 		"address", ln.Addr().String(),
 		"max_conns", s.opts.MaxConns,
 		"auth", s.opts.Auth.ShouldAuth(),
@@ -148,7 +150,8 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 			defer func() { <-sema }()
 			defer func() {
 				if r := recover(); r != nil {
-					s.opts.Logger.Error("connection panic",
+					s.opts.Logger.Error(
+						"connection panic",
 						"remote", c.RemoteAddr(),
 						"panic", r,
 					)

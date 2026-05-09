@@ -168,49 +168,60 @@ func parsePHC(s string) (argon2idParams, error) {
 	if parts[1] != "argon2id" {
 		return argon2idParams{}, errPHCAlgo
 	}
-	var version int
-	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil {
-		return argon2idParams{}, fmt.Errorf("%w: %v", errPHCFormat, err)
+	version, params, err := parsePHCHeader(parts[2], parts[3])
+	if err != nil {
+		return argon2idParams{}, err
 	}
 	if version != argon2.Version {
 		return argon2idParams{}, errPHCVersion
 	}
-	var m uint32
-	var t uint32
-	var pCost uint8
-	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &m, &t, &pCost); err != nil {
-		return argon2idParams{}, fmt.Errorf("%w: params: %v", errPHCFormat, err)
-	}
-	if m == 0 || m > maxArgon2Memory {
-		return argon2idParams{}, fmt.Errorf("%w: memory %d", errPHCParams, m)
-	}
-	if t == 0 || t > maxArgon2TimeCost {
-		return argon2idParams{}, fmt.Errorf("%w: time cost %d", errPHCParams, t)
-	}
-	if pCost == 0 || pCost > maxArgon2Parallelism {
-		return argon2idParams{}, fmt.Errorf("%w: parallelism %d", errPHCParams, pCost)
-	}
 	salt, err := decodeB64(parts[4])
 	if err != nil {
-		return argon2idParams{}, fmt.Errorf("%w: salt: %v", errPHCFormat, err)
+		return argon2idParams{}, errors.Join(errPHCFormat, fmt.Errorf("salt: %w", err))
 	}
 	if len(salt) == 0 || len(salt) > maxArgon2SaltLen {
 		return argon2idParams{}, fmt.Errorf("%w: salt length %d", errPHCParams, len(salt))
 	}
 	hash, err := decodeB64(parts[5])
 	if err != nil {
-		return argon2idParams{}, fmt.Errorf("%w: hash: %v", errPHCFormat, err)
+		return argon2idParams{}, errors.Join(errPHCFormat, fmt.Errorf("hash: %w", err))
 	}
 	if len(hash) == 0 || len(hash) > maxArgon2HashLen {
 		return argon2idParams{}, fmt.Errorf("%w: hash length %d", errPHCParams, len(hash))
 	}
 	return argon2idParams{
-		memory:      m,
-		timeCost:    t,
-		parallelism: pCost,
+		memory:      params.memory,
+		timeCost:    params.timeCost,
+		parallelism: params.parallelism,
 		salt:        salt,
 		hash:        hash,
 	}, nil
+}
+
+// parsePHCHeader extracts the argon2 version and m/t/p parameters from the
+// two PHC header segments. Splitting it out keeps parsePHC's cyclomatic
+// complexity within lint thresholds.
+func parsePHCHeader(versionPart, paramsPart string) (int, argon2idParams, error) {
+	var version int
+	if _, err := fmt.Sscanf(versionPart, "v=%d", &version); err != nil {
+		return 0, argon2idParams{}, errors.Join(errPHCFormat, fmt.Errorf("version: %w", err))
+	}
+	var p argon2idParams
+	var pCost uint8
+	if _, err := fmt.Sscanf(paramsPart, "m=%d,t=%d,p=%d", &p.memory, &p.timeCost, &pCost); err != nil {
+		return 0, argon2idParams{}, errors.Join(errPHCFormat, fmt.Errorf("params: %w", err))
+	}
+	p.parallelism = pCost
+	if p.memory == 0 || p.memory > maxArgon2Memory {
+		return 0, argon2idParams{}, fmt.Errorf("%w: memory %d", errPHCParams, p.memory)
+	}
+	if p.timeCost == 0 || p.timeCost > maxArgon2TimeCost {
+		return 0, argon2idParams{}, fmt.Errorf("%w: time cost %d", errPHCParams, p.timeCost)
+	}
+	if p.parallelism == 0 || p.parallelism > maxArgon2Parallelism {
+		return 0, argon2idParams{}, fmt.Errorf("%w: parallelism %d", errPHCParams, p.parallelism)
+	}
+	return version, p, nil
 }
 
 func decodeB64(s string) ([]byte, error) {

@@ -3,11 +3,11 @@ package proxy
 // SOCKS5 protocol constants per RFC 1928 and RFC 1929. Kept in one place to
 // avoid magic numbers scattered across the package.
 const (
-	socks5Version byte = 0x05
+	socks5Version  byte = 0x05
 	authSubVersion byte = 0x01
 
-	authMethodNoAuth        byte = 0x00
-	authMethodUserPassword  byte = 0x02
+	authMethodNoAuth         byte = 0x00
+	authMethodUserPassword   byte = 0x02
 	authMethodNoneAcceptable byte = 0xFF
 
 	authStatusSuccess byte = 0x00
