@@ -1,3 +1,32 @@
-listen ="0.0.0.0:8008"
+# go-socks5 example configuration. See README.md for full reference.
 
+listen = "0.0.0.0:8008"
+
+# When auth = false, no users may be defined.
 auth = false
+
+# Enable to expose Prometheus /metrics on its own port.
+# metrics_addr = "0.0.0.0:9090"
+
+# Optional pprof endpoint (disabled by default).
+# pprof_addr = "127.0.0.1:6060"
+
+# Connection limits and timeouts (Go duration syntax).
+max_conns         = 1024
+handshake_timeout = "30s"
+dial_timeout      = "10s"
+idle_timeout      = "5m"
+shutdown_timeout  = "30s"
+
+# Logging: format = "json" | "text"; level = "debug" | "info" | "warn" | "error".
+log_format = "json"
+log_level  = "info"
+
+# Example credentials block (uncomment + set auth = true).
+# Use `hashpass` to generate the argon2id PHC string for `pass`.
+#
+#   echo -n "hunter2" | ./bin/hashpass
+#
+# [[users]]
+#     login = "alice"
+#     pass  = "$argon2id$v=19$m=65536,t=3,p=4$<base64-salt>$<base64-hash>"

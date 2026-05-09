@@ -1,0 +1,83 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: go-socks5
+    main: ./cmd/go-socks5
+    binary: go-socks5
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+  - id: hashpass
+    main: ./cmd/hashpass
+    binary: hashpass
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+sboms:
+  - artifacts: archive
+
+dockers:
+  - image_templates:
+      - "ghcr.io/gumeniukcom/go-socks5:{{ .Version }}-amd64"
+    use: buildx
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.source=https://github.com/gumeniukcom/go-socks5"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+    goarch: amd64
+  - image_templates:
+      - "ghcr.io/gumeniukcom/go-socks5:{{ .Version }}-arm64"
+    use: buildx
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.source=https://github.com/gumeniukcom/go-socks5"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+    goarch: arm64
+
+docker_manifests:
+  - name_template: "ghcr.io/gumeniukcom/go-socks5:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/gumeniukcom/go-socks5:{{ .Version }}-amd64"
+      - "ghcr.io/gumeniukcom/go-socks5:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/gumeniukcom/go-socks5:latest"
+    image_templates:
+      - "ghcr.io/gumeniukcom/go-socks5:{{ .Version }}-amd64"
+      - "ghcr.io/gumeniukcom/go-socks5:{{ .Version }}-arm64"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
